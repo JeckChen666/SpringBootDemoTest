@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>系统信息</title>
+</head>
+<body>
+    <h1>系统信息</h1>
+    <p>操作系统名称: <span th:text="${osName}"></span></p>
+    <p>操作系统版本: <span th:text="${osVersion}"></span></p>
+    <p>可用处理器数: <span th:text="${availableProcessors}"></span></p>
+    <p>CPU使用率: <span id="cpuLoad">加载中...</span></p>
+    <p>内存使用: <span id="memoryUsage">加载中...</span></p>
+    <p>堆内存使用: <span id="heapMemoryUsage">加载中...</span></p>
+    <p>非堆内存使用: <span id="nonHeapMemoryUsage">加载中...</span></p>
+    <p>JVM名称: <span id="jvmName">加载中...</span></p>
+    <p>JVM版本: <span id="jvmVersion">加载中...</span></p>
+    <p>JVM启动时间: <span id="jvmStartTime">加载中...</span></p>
+    <p>JVM运行时长: <span id="jvmUptime">加载中...</span></p>
+    <p>线程数: <span id="threadCount">加载中...</span></p>
+    <script>
+        function formatPercent(val) {
+            if(val < 0) return '不支持';
+            return (val * 100).toFixed(2) + '%';
+        }
+        function formatMemory(used, max) {
+            if(max <= 0) return '未知';
+            return (used/1024/1024).toFixed(2) + 'MB / ' + (max/1024/1024).toFixed(2) + 'MB';
+        }
+        function formatDate(ts) {
+            if(!ts) return '未知';
+            var date = new Date(ts);
+            return date.toLocaleString();
+        }
+        function formatDuration(ms) {
+            if(!ms) return '未知';
+            var sec = Math.floor(ms / 1000);
+            var min = Math.floor(sec / 60);
+            var hour = Math.floor(min / 60);
+            var day = Math.floor(hour / 24);
+            hour = hour % 24;
+            min = min % 60;
+            sec = sec % 60;
+            return (day > 0 ? day + '天' : '') + (hour > 0 ? hour + '小时' : '') + (min > 0 ? min + '分' : '') + sec + '秒';
+        }
+        function refreshSystemUsage() {
+            fetch('/api/system/usage').then(resp => resp.json()).then(data => {
+                document.getElementById('cpuLoad').innerText = formatPercent(data.cpuLoad);
+                document.getElementById('memoryUsage').innerText = formatMemory(data.usedHeapMemory + data.usedNonHeapMemory, data.maxHeapMemory + data.maxNonHeapMemory);
+                document.getElementById('heapMemoryUsage').innerText = formatMemory(data.usedHeapMemory, data.maxHeapMemory);
+                document.getElementById('nonHeapMemoryUsage').innerText = formatMemory(data.usedNonHeapMemory, data.maxNonHeapMemory);
+                document.getElementById('jvmName').innerText = data.jvmName || '未知';
+                document.getElementById('jvmVersion').innerText = data.jvmVersion || '未知';
+                document.getElementById('jvmStartTime').innerText = formatDate(data.jvmStartTime);
+                document.getElementById('jvmUptime').innerText = formatDuration(data.jvmUptime);
+                document.getElementById('threadCount').innerText = data.threadCount || '未知';
+            });
+        }
+        setInterval(refreshSystemUsage, 2000);
+        window.onload = refreshSystemUsage;
+    </script>
+    <!-- 可以添加更多系统信息 -->
+</body>
+</html>
