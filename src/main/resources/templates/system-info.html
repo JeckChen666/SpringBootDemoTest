@@ -2,22 +2,179 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <head>
     <title>系统信息</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-    <h1>系统信息</h1>
-    <p>操作系统名称: <span th:text="${osName}"></span></p>
-    <p>操作系统版本: <span th:text="${osVersion}"></span></p>
-    <p>可用处理器数: <span th:text="${availableProcessors}"></span></p>
-    <p>CPU使用率: <span id="cpuLoad">加载中...</span></p>
-    <p>内存使用: <span id="memoryUsage">加载中...</span></p>
-    <p>堆内存使用: <span id="heapMemoryUsage">加载中...</span></p>
-    <p>非堆内存使用: <span id="nonHeapMemoryUsage">加载中...</span></p>
-    <p>JVM名称: <span id="jvmName">加载中...</span></p>
-    <p>JVM版本: <span id="jvmVersion">加载中...</span></p>
-    <p>JVM启动时间: <span id="jvmStartTime">加载中...</span></p>
-    <p>JVM运行时长: <span id="jvmUptime">加载中...</span></p>
-    <p>线程数: <span id="threadCount">加载中...</span></p>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <div class="text-center mb-10">
+            <h1 class="text-3xl font-bold text-gray-800">系统信息监控面板</h1>
+            <div class="w-24 h-1 bg-blue-500 mx-auto mt-2"></div>
+        </div>
+
+        <!-- 刷新控制 -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4 pb-2 border-b">刷新控制</h2>
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-center space-x-4">
+                    <span class="text-gray-700 font-medium">刷新间隔:</span>
+                    <button id="interval-1s" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
+                            onclick="setRefreshInterval(1000)">1秒</button>
+                    <button id="interval-5s" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                            onclick="setRefreshInterval(5000)">5秒</button>
+                    <button id="interval-10s" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
+                            onclick="setRefreshInterval(10000)">10秒</button>
+                </div>
+                <div class="text-gray-600">
+                    当前刷新间隔: <span id="current-interval" class="font-semibold">5秒</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 基本系统信息 -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4 pb-2 border-b">基础系统信息</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="bg-blue-50 p-4 rounded-lg">
+                    <p class="text-sm text-gray-600">操作系统名称</p>
+                    <p class="text-lg font-semibold text-gray-800" th:text="${osName}"></p>
+                </div>
+                <div class="bg-green-50 p-4 rounded-lg">
+                    <p class="text-sm text-gray-600">操作系统版本</p>
+                    <p class="text-lg font-semibold text-gray-800" th:text="${osVersion}"></p>
+                </div>
+                <div class="bg-purple-50 p-4 rounded-lg">
+                    <p class="text-sm text-gray-600">可用处理器数</p>
+                    <p class="text-lg font-semibold text-gray-800" th:text="${availableProcessors}"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 构建信息 -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4 pb-2 border-b">应用构建信息</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-yellow-50 p-4 rounded-lg">
+                    <p class="text-sm text-gray-600">构建时间</p>
+                    <p class="text-lg font-semibold text-gray-800" id="buildTime">加载中...</p>
+                </div>
+                <div class="bg-indigo-50 p-4 rounded-lg">
+                    <p class="text-sm text-gray-600">Git分支</p>
+                    <p class="text-lg font-semibold text-gray-800" id="gitBranch">加载中...</p>
+                </div>
+                <div class="bg-pink-50 p-4 rounded-lg">
+                    <p class="text-sm text-gray-600">Git提交ID</p>
+                    <p class="text-lg font-semibold text-gray-800" id="gitCommitId">加载中...</p>
+                </div>
+                <div class="bg-teal-50 p-4 rounded-lg">
+                    <p class="text-sm text-gray-600">Git提交时间</p>
+                    <p class="text-lg font-semibold text-gray-800" id="gitCommitTime">加载中...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 实时监控信息 -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4 pb-2 border-b">实时监控信息</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div class="bg-yellow-50 p-4 rounded-lg">
+                    <p class="text-sm text-gray-600">CPU使用率</p>
+                    <p class="text-lg font-semibold text-gray-800" id="cpuLoad">加载中...</p>
+                </div>
+                <div class="bg-red-50 p-4 rounded-lg">
+                    <p class="text-sm text-gray-600">内存使用</p>
+                    <p class="text-lg font-semibold text-gray-800" id="memoryUsage">加载中...</p>
+                </div>
+                <div class="bg-indigo-50 p-4 rounded-lg">
+                    <p class="text-sm text-gray-600">堆内存使用</p>
+                    <p class="text-lg font-semibold text-gray-800" id="heapMemoryUsage">加载中...</p>
+                </div>
+                <div class="bg-pink-50 p-4 rounded-lg">
+                    <p class="text-sm text-gray-600">非堆内存使用</p>
+                    <p class="text-lg font-semibold text-gray-800" id="nonHeapMemoryUsage">加载中...</p>
+                </div>
+                <div class="bg-teal-50 p-4 rounded-lg">
+                    <p class="text-sm text-gray-600">线程数</p>
+                    <p class="text-lg font-semibold text-gray-800" id="threadCount">加载中...</p>
+                </div>
+                <div class="bg-orange-50 p-4 rounded-lg">
+                    <p class="text-sm text-gray-600">JVM运行时长</p>
+                    <p class="text-lg font-semibold text-gray-800" id="jvmUptime">加载中...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- JVM详细信息 -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4 pb-2 border-b">JVM详细信息</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="border rounded-lg p-4">
+                    <p class="text-sm text-gray-600">JVM名称</p>
+                    <p class="text-lg font-semibold text-gray-800" id="jvmName">加载中...</p>
+                </div>
+                <div class="border rounded-lg p-4">
+                    <p class="text-sm text-gray-600">JVM版本</p>
+                    <p class="text-lg font-semibold text-gray-800" id="jvmVersion">加载中...</p>
+                </div>
+                <div class="border rounded-lg p-4 md:col-span-2">
+                    <p class="text-sm text-gray-600">JVM启动时间</p>
+                    <p class="text-lg font-semibold text-gray-800" id="jvmStartTime">加载中...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
+        // 全局变量存储定时器ID和当前间隔
+        let systemUsageIntervalId;
+        let buildInfoIntervalId;
+        let currentInterval = 5000; // 默认5秒
+        
+        // 更新按钮样式
+        function updateButtonStyles(selectedInterval) {
+            const buttons = {
+                1000: document.getElementById('interval-1s'),
+                5000: document.getElementById('interval-5s'),
+                10000: document.getElementById('interval-10s')
+            };
+            
+            // 重置所有按钮样式
+            Object.values(buttons).forEach(button => {
+                button.classList.remove('bg-blue-500', 'text-white');
+                button.classList.add('bg-gray-200', 'text-gray-800');
+            });
+            
+            // 设置选中按钮样式
+            const selectedButton = buttons[selectedInterval];
+            if (selectedButton) {
+                selectedButton.classList.remove('bg-gray-200', 'text-gray-800');
+                selectedButton.classList.add('bg-blue-500', 'text-white');
+            }
+            
+            // 更新显示的当前间隔
+            const intervalText = {
+                1000: '1秒',
+                5000: '5秒',
+                10000: '10秒'
+            };
+            document.getElementById('current-interval').textContent = intervalText[selectedInterval];
+        }
+        
+        // 设置刷新间隔
+        function setRefreshInterval(interval) {
+            currentInterval = interval;
+            updateButtonStyles(interval);
+            
+            // 清除现有定时器
+            clearInterval(systemUsageIntervalId);
+            clearInterval(buildInfoIntervalId);
+            
+            // 设置新的定时器
+            systemUsageIntervalId = setInterval(refreshSystemUsage, interval);
+            // buildInfoIntervalId = setInterval(refreshBuildInfo, interval);
+        }
+        
         function formatPercent(val) {
             if(val < 0) return '不支持';
             return (val * 100).toFixed(2) + '%';
@@ -42,6 +199,7 @@
             sec = sec % 60;
             return (day > 0 ? day + '天' : '') + (hour > 0 ? hour + '小时' : '') + (min > 0 ? min + '分' : '') + sec + '秒';
         }
+        
         function refreshSystemUsage() {
             fetch('/api/system/usage').then(resp => resp.json()).then(data => {
                 document.getElementById('cpuLoad').innerText = formatPercent(data.cpuLoad);
@@ -55,9 +213,25 @@
                 document.getElementById('threadCount').innerText = data.threadCount || '未知';
             });
         }
-        setInterval(refreshSystemUsage, 2000);
-        window.onload = refreshSystemUsage;
+        
+        function refreshBuildInfo() {
+            fetch('/api/build-info').then(resp => resp.json()).then(data => {
+                document.getElementById('buildTime').innerText = data.buildTime || '未知';
+                document.getElementById('gitBranch').innerText = data.gitBranch || '未知';
+                document.getElementById('gitCommitId').innerText = data.gitCommitId || '未知';
+                document.getElementById('gitCommitTime').innerText = data.gitCommitTime || '未知';
+            });
+        }
+        
+        // 页面加载完成后初始化
+        window.onload = function() {
+            // 设置默认刷新间隔
+            setRefreshInterval(currentInterval);
+            
+            // 立即获取一次数据
+            refreshSystemUsage();
+            refreshBuildInfo();
+        };
     </script>
-    <!-- 可以添加更多系统信息 -->
 </body>
 </html>
