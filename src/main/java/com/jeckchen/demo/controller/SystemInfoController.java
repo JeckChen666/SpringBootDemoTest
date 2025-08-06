@@ -1,5 +1,7 @@
 package com.jeckchen.demo.controller;
 
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -12,8 +14,12 @@ import java.lang.management.OperatingSystemMXBean;
 import java.util.HashMap;
 import java.util.Map;
 
+@Slf4j
 @Controller
 public class SystemInfoController {
+
+    @Value("${app.build.time}")
+    private String buildTime;
 
     @GetMapping("/system-info")
     public String getSystemInfo(Model model) {
@@ -62,6 +68,17 @@ public class SystemInfoController {
         result.put("jvmStartTime", startTime);
         result.put("jvmUptime", uptime);
         result.put("threadCount", threadCount);
+        // log.info("result: {}", result);
+        System.out.println("system-info:" + result);
+        return result;
+    }
+
+    @ResponseBody
+    @GetMapping("/api/build-info")
+    public Map<String, Object> getBuildInfo() {
+        Map<String, Object> result = new HashMap<>();
+        result.put("buildTime", buildTime);
+        System.out.println("buildTime:" + result);
         return result;
     }
 }
