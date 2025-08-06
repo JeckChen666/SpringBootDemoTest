@@ -2,6 +2,7 @@ package com.jeckchen.demo.controller;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.PropertySource;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -11,15 +12,27 @@ import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
 import java.lang.management.MemoryUsage;
 import java.lang.management.OperatingSystemMXBean;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
 @Slf4j
 @Controller
+@PropertySource(value = "classpath:git.properties", ignoreResourceNotFound = true)
 public class SystemInfoController {
 
     @Value("${app.build.time}")
     private String buildTime;
+    
+    @Value("${git.branch:unknown}")
+    private String gitBranch;
+    
+    @Value("${git.commit.id.abbrev:unknown}")
+    private String gitCommitId;
+    
+    @Value("${git.commit.time:unknown}")
+    private String gitCommitTime;
 
     @GetMapping("/system-info")
     public String getSystemInfo(Model model) {
@@ -69,16 +82,18 @@ public class SystemInfoController {
         result.put("jvmUptime", uptime);
         result.put("threadCount", threadCount);
         // log.info("result: {}", result);
-        System.out.println("system-info:" + result);
+        System.out.println(result);
         return result;
     }
-
+    
     @ResponseBody
     @GetMapping("/api/build-info")
     public Map<String, Object> getBuildInfo() {
         Map<String, Object> result = new HashMap<>();
         result.put("buildTime", buildTime);
-        System.out.println("buildTime:" + result);
+        result.put("gitBranch", gitBranch);
+        result.put("gitCommitId", gitCommitId);
+        result.put("gitCommitTime", gitCommitTime);
         return result;
     }
 }
