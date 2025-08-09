@@ -1,4 +1,4 @@
-package com.jeckchen.demo.conf;
+package com.jeckchen.demo.config;
 
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
