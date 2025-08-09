@@ -44,6 +44,16 @@ public class SystemInfoController {
         return "system-info";
     }
 
+    @GetMapping("/terminal")
+    public String terminal() {
+        return "terminal";
+    }
+    
+    @GetMapping("/xterm")
+    public String xterm() {
+        return "xterm";
+    }
+
     @ResponseBody
     @GetMapping("/api/system/usage")
     public Map<String, Object> getSystemUsage() {

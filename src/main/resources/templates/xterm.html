@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xterm.js 终端</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background-color: #1e1e1e;
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+        }
+        .terminal-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .terminal-header {
+            background-color: #333;
+            padding: 10px;
+            border-radius: 5px 5px 0 0;
+            text-align: center;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .connection-status {
+            padding: 5px 10px;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+        .status-connected {
+            background-color: #28a745;
+            color: white;
+        }
+        .status-disconnected {
+            background-color: #dc3545;
+            color: white;
+        }
+        .status-connecting {
+            background-color: #ffc107;
+            color: black;
+        }
+        #terminal {
+            background-color: #000;
+            border: 1px solid #333;
+            border-radius: 0 0 5px 5px;
+            padding: 10px;
+        }
+        .controls {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .btn {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            margin: 0 5px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .btn:hover {
+            background-color: #0056b3;
+        }
+        .btn:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="terminal-container">
+        <h1>Xterm.js 终端模拟器</h1>
+        
+        <div class="controls">
+            <button id="connectBtn" class="btn">连接终端</button>
+            <button id="disconnectBtn" class="btn" disabled>断开连接</button>
+            <button id="clearBtn" class="btn">清屏</button>
+        </div>
+        
+        <div class="terminal-header">
+            <strong>终端</strong>
+            <div id="connectionStatus" class="connection-status status-disconnected">未连接</div>
+        </div>
+        
+        <div id="terminal"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+    <script>
+        let terminal;
+        let websocket;
+        let fitAddon;
+        let isConnected = false;
+        let currentLine = ''; // 跟踪当前行内容
+        let cursorPosition = 0; // 跟踪光标位置
+        
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const connectionStatus = document.getElementById('connectionStatus');
+        
+        // 初始化终端
+        function initTerminal() {
+            terminal = new Terminal({
+                cursorBlink: true,
+                fontSize: 14,
+                fontFamily: 'Courier New, monospace',
+                theme: {
+                    background: '#000000',
+                    foreground: '#ffffff',
+                    cursor: '#ffffff',
+                    selection: '#ffffff40'
+                },
+                cols: 80,
+                rows: 24
+            });
+            
+            fitAddon = new FitAddon.FitAddon();
+            terminal.loadAddon(fitAddon);
+            
+            terminal.open(document.getElementById('terminal'));
+            fitAddon.fit();
+            
+            // 监听终端输入
+            terminal.onData(data => {
+                if (websocket && websocket.readyState === WebSocket.OPEN) {
+                    // 检测Tab键 (ASCII 9)
+                    if (data === '\t') {
+                        // 发送Tab补全请求
+                        websocket.send(JSON.stringify({
+                            type: 'tab_completion',
+                            data: getCurrentLine()
+                        }));
+                    } else {
+                        // 更新当前行内容
+                        updateCurrentLine(data);
+                        
+                        // 直接发送所有输入数据到后端，让后端的PowerShell处理
+                        websocket.send(JSON.stringify({
+                            type: 'command',
+                            data: data
+                        }));
+                    }
+                }
+            });
+            
+            // 监听终端大小变化
+            terminal.onResize(size => {
+                if (websocket && websocket.readyState === WebSocket.OPEN) {
+                    websocket.send(JSON.stringify({
+                        type: 'resize',
+                        cols: size.cols,
+                        rows: size.rows
+                    }));
+                }
+            });
+            
+            // 窗口大小变化时调整终端大小
+            window.addEventListener('resize', () => {
+                if (terminal) {
+                    fitAddon.fit();
+                }
+            });
+            
+            terminal.writeln('\x1b[1;32m欢迎使用 Xterm.js 终端！\x1b[0m');
+            terminal.writeln('点击"连接终端"按钮开始使用。');
+        }
+        
+        // 连接WebSocket
+        function connectWebSocket() {
+            updateConnectionStatus('connecting', '连接中...');
+            
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws/terminal`;
+            
+            websocket = new WebSocket(wsUrl);
+            
+            websocket.onopen = function(event) {
+                console.log('WebSocket连接已建立');
+                updateConnectionStatus('connected', '已连接');
+                isConnected = true;
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+                
+                // 发送连接请求
+                websocket.send(JSON.stringify({
+                    type: 'connect'
+                }));
+            };
+            
+            websocket.onmessage = function(event) {
+                try {
+                    const message = JSON.parse(event.data);
+                    handleWebSocketMessage(message);
+                } catch (e) {
+                    console.error('解析WebSocket消息失败:', e);
+                }
+            };
+            
+            websocket.onclose = function(event) {
+                console.log('WebSocket连接已关闭');
+                updateConnectionStatus('disconnected', '未连接');
+                isConnected = false;
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+                
+                terminal.writeln('\r\n\x1b[1;31m连接已断开\x1b[0m');
+            };
+            
+            websocket.onerror = function(error) {
+                console.error('WebSocket错误:', error);
+                updateConnectionStatus('disconnected', '连接错误');
+                terminal.writeln('\r\n\x1b[1;31mWebSocket连接错误\x1b[0m');
+            };
+        }
+        
+        // 处理WebSocket消息
+        function handleWebSocketMessage(message) {
+            switch (message.type) {
+                case 'connected':
+                    terminal.writeln('\r\n\x1b[1;32m' + message.data + '\x1b[0m');
+                    break;
+                case 'output':
+                    terminal.write(message.data);
+                    break;
+                case 'error':
+                    terminal.writeln('\r\n\x1b[1;31m错误: ' + message.data + '\x1b[0m');
+                    break;
+                case 'tab_completion_result':
+                    handleTabCompletion(message.data);
+                    break;
+                default:
+                    console.log('未知消息类型:', message.type);
+            }
+        }
+        
+        // 断开连接
+        function disconnect() {
+            if (websocket) {
+                websocket.close();
+            }
+        }
+        
+        // 更新连接状态
+        function updateConnectionStatus(status, text) {
+            connectionStatus.textContent = text;
+            connectionStatus.className = 'connection-status status-' + status;
+        }
+        
+        // 清屏
+        function clearTerminal() {
+            if (terminal) {
+                terminal.clear();
+            }
+        }
+        
+        // 获取当前行内容
+        function getCurrentLine() {
+            return currentLine;
+        }
+        
+        // 更新当前行内容
+        function updateCurrentLine(data) {
+            // 处理回车键
+            if (data === '\r' || data === '\n') {
+                currentLine = '';
+                cursorPosition = 0;
+            }
+            // 处理退格键
+            else if (data === '\x7f' || data === '\b') {
+                if (cursorPosition > 0) {
+                    currentLine = currentLine.slice(0, cursorPosition - 1) + currentLine.slice(cursorPosition);
+                    cursorPosition--;
+                }
+            }
+            // 处理普通字符
+            else if (data.length === 1 && data.charCodeAt(0) >= 32) {
+                currentLine = currentLine.slice(0, cursorPosition) + data + currentLine.slice(cursorPosition);
+                cursorPosition++;
+            }
+        }
+        
+        // 处理Tab补全结果
+        function handleTabCompletion(completionData) {
+            if (completionData && completionData.length > 0) {
+                // 如果有补全结果，替换当前输入
+                const completion = completionData[0]; // 使用第一个补全结果
+                const words = currentLine.trim().split(' ');
+                if (words.length > 0) {
+                    words[words.length - 1] = completion;
+                    const newLine = words.join(' ');
+                    
+                    // 清除当前行并写入补全结果
+                    terminal.write('\r\x1b[K'); // 清除当前行
+                    terminal.write(newLine);
+                    
+                    // 更新当前行状态
+                    currentLine = newLine;
+                    cursorPosition = newLine.length;
+                }
+            }
+        }
+        
+        // 事件监听器
+        connectBtn.addEventListener('click', connectWebSocket);
+        disconnectBtn.addEventListener('click', disconnect);
+        clearBtn.addEventListener('click', clearTerminal);
+        
+        // 页面加载完成后初始化终端
+        window.addEventListener('load', function() {
+            initTerminal();
+        });
+        
+        // 页面卸载时断开连接
+        window.addEventListener('beforeunload', function() {
+            if (websocket) {
+                websocket.close();
+            }
+        });
+    </script>
+</body>
+</html>
