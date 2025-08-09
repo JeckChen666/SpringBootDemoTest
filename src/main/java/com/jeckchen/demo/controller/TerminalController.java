@@ -1,5 +1,8 @@
 package com.jeckchen.demo.controller;
 
+import com.jeckchen.demo.dto.*;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.io.*;
@@ -19,6 +22,7 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/api/terminal")
+@Tag(name = "终端接口", description = "终端命令执行相关操作接口")
 public class TerminalController {
 
     // 存储持久化的shell会话
@@ -51,10 +55,11 @@ public class TerminalController {
      * @param request 要执行的命令
      * @return SSE流
      */
+    @Operation(summary = "执行系统命令（SSE流式输出）")
     @PostMapping("/execute-stream")
-    public SseEmitter executeCommandStream(@RequestBody Map<String, String> request) {
+    public SseEmitter executeCommandStream(@RequestBody CommandRequest request) {
         SseEmitter emitter = new SseEmitter(60000L); // 60秒超时
-        String command = request.get("command");
+        String command = request.getCommand();
         
         if (command == null || command.trim().isEmpty()) {
             try {
@@ -90,7 +95,7 @@ public class TerminalController {
                 emitter.send(SseEmitter.event().name("start").data("命令开始执行: " + command));
                 
                 // 实时读取输出
-                String encoding = os.contains("win") ? "UTF-8" : "UTF-8";
+                String encoding = "UTF-8";
                 try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), encoding))) {
                     String line;
                     while ((line = reader.readLine()) != null) {
@@ -126,18 +131,17 @@ public class TerminalController {
      * @param request 要执行的命令
      * @return 执行结果
      */
+    @Operation(summary = "执行系统命令")
     @PostMapping("/execute")
-    public Map<String, Object> executeCommand(@RequestBody Map<String, String> request) {
-        Map<String, Object> result = new HashMap<>();
-        String command = request.get("command");
+    public CommandResponse executeCommand(@RequestBody CommandRequest request) {
+        String command = request.getCommand();
         
         if (command == null || command.trim().isEmpty()) {
-            result.put("success", false);
-            result.put("error", "命令不能为空");
-            return result;
+            return new CommandResponse(false, null, "命令不能为空", null, null);
         }
         
         try {
+            long startTime = System.currentTimeMillis();
             // 根据操作系统选择命令执行方式
             ProcessBuilder processBuilder;
             String os = System.getProperty("os.name").toLowerCase();
@@ -160,9 +164,7 @@ public class TerminalController {
             
             if (!finished) {
                 process.destroyForcibly();
-                result.put("success", false);
-                result.put("error", "命令执行超时（30秒）");
-                return result;
+                return new CommandResponse(false, null, "命令执行超时（30秒）", null, null);
             }
             
             // 读取输出
@@ -176,41 +178,35 @@ public class TerminalController {
             }
             
             int exitCode = process.exitValue();
-            result.put("success", exitCode == 0);
-            result.put("exitCode", exitCode);
-            result.put("output", output.toString());
-            result.put("command", command);
+            long executionTime = System.currentTimeMillis() - startTime;
+            
+            return new CommandResponse(exitCode == 0, output.toString(), null, exitCode, executionTime);
             
         } catch (Exception e) {
-            result.put("success", false);
-            result.put("error", "执行命令时发生错误: " + e.getMessage());
+            return new CommandResponse(false, null, "执行命令时发生错误: " + e.getMessage(), null, null);
         }
-        
-        return result;
     }
     
     /**
      * 获取当前工作目录
      * @return 当前工作目录
      */
+    @Operation(summary = "获取当前工作目录")
     @GetMapping("/pwd")
-    public Map<String, Object> getCurrentDirectory() {
-        Map<String, Object> result = new HashMap<>();
+    public ApiResponse<String> getCurrentDirectory() {
         try {
             String currentDir = System.getProperty("user.dir");
-            result.put("success", true);
-            result.put("currentDirectory", currentDir);
+            return ApiResponse.success("获取当前目录成功", currentDir);
         } catch (Exception e) {
-            result.put("success", false);
-            result.put("error", "获取当前目录失败: " + e.getMessage());
+            return ApiResponse.error("获取当前目录失败: " + e.getMessage());
         }
-        return result;
     }
     
     /**
      * 获取系统信息
      * @return 系统信息
      */
+    @Operation(summary = "获取系统信息")
     @GetMapping("/sysinfo")
     public Map<String, Object> getSystemInfo() {
         Map<String, Object> result = new HashMap<>();
@@ -233,22 +229,18 @@ public class TerminalController {
      * 创建新的shell会话
      * @return 会话信息
      */
+    @Operation(summary = "创建终端会话")
     @PostMapping("/session/create")
-    public Map<String, Object> createSession() {
-        Map<String, Object> result = new HashMap<>();
+    public SessionCreateResponse createSession() {
         try {
             String sessionId = UUID.randomUUID().toString();
             ShellSession session = new ShellSession(sessionId);
             sessions.put(sessionId, session);
             
-            result.put("success", true);
-            result.put("sessionId", sessionId);
-            result.put("message", "Shell会话创建成功");
+            return new SessionCreateResponse(true, sessionId, "Shell会话创建成功", System.currentTimeMillis());
         } catch (Exception e) {
-            result.put("success", false);
-            result.put("error", "创建会话失败: " + e.getMessage());
+            return new SessionCreateResponse(false, null, "创建会话失败: " + e.getMessage(), System.currentTimeMillis());
         }
-        return result;
     }
     
     /**
@@ -257,42 +249,34 @@ public class TerminalController {
      * @param request 请求参数
      * @return 执行结果
      */
+    @Operation(summary = "在指定会话中执行命令")
     @PostMapping("/session/{sessionId}/execute")
-    public Map<String, Object> executeInSession(@PathVariable String sessionId, @RequestBody Map<String, Object> request) {
-        Map<String, Object> result = new HashMap<>();
-        
+    public SessionExecuteResponse executeInSession(@PathVariable String sessionId, @RequestBody SessionExecuteRequest request) {
         ShellSession session = sessions.get(sessionId);
         if (session == null || session.isExpired()) {
             if (session != null && session.isExpired()) {
                 sessions.remove(sessionId);
             }
-            result.put("success", false);
-            result.put("error", "会话不存在或已过期");
-            return result;
+            return new SessionExecuteResponse(false, null, "会话不存在或已过期", sessionId, null, null);
         }
         
-        String command = (String) request.get("command");
-        Boolean waitForOutput = (Boolean) request.getOrDefault("waitForOutput", true);
-        Integer timeoutSeconds = (Integer) request.getOrDefault("timeoutSeconds", 10);
+        String command = request.getCommand();
+        Boolean waitForOutput = request.getWaitForOutput() != null ? request.getWaitForOutput() : true;
+        Integer timeoutSeconds = request.getTimeoutSeconds() != null ? request.getTimeoutSeconds() : 10;
         
         if (command == null || command.trim().isEmpty()) {
-            result.put("success", false);
-            result.put("error", "命令不能为空");
-            return result;
+            return new SessionExecuteResponse(false, null, "命令不能为空", sessionId, command, null);
         }
         
         try {
+            long startTime = System.currentTimeMillis();
             String output = session.executeCommand(command, waitForOutput, timeoutSeconds);
-            result.put("success", true);
-            result.put("output", output);
-            result.put("command", command);
-            result.put("sessionId", sessionId);
+            long executionTime = System.currentTimeMillis() - startTime;
+            
+            return new SessionExecuteResponse(true, output, null, sessionId, command, executionTime);
         } catch (Exception e) {
-            result.put("success", false);
-            result.put("error", "执行命令失败: " + e.getMessage());
+            return new SessionExecuteResponse(false, null, "执行命令失败: " + e.getMessage(), sessionId, command, null);
         }
-        
-        return result;
     }
     
     /**
@@ -300,25 +284,23 @@ public class TerminalController {
      * @param sessionId 会话ID
      * @return 会话状态
      */
+    @Operation(summary = "获取会话状态")
     @GetMapping("/session/{sessionId}/status")
-    public Map<String, Object> getSessionStatus(@PathVariable String sessionId) {
-        Map<String, Object> result = new HashMap<>();
-        
+    public ApiResponse<SessionStatusResponse> getSessionStatus(@PathVariable String sessionId) {
         ShellSession session = sessions.get(sessionId);
         if (session == null) {
-            result.put("success", false);
-            result.put("error", "会话不存在");
-            return result;
+            return ApiResponse.error("会话不存在: " + sessionId);
         }
         
-        result.put("success", true);
-        result.put("sessionId", sessionId);
-        result.put("isAlive", session.isAlive());
-        result.put("isExpired", session.isExpired());
-        result.put("createdTime", session.getCreatedTime());
-        result.put("lastAccessTime", session.getLastAccessTime());
+        SessionStatusResponse statusResponse = new SessionStatusResponse(
+            sessionId,
+            session.isExpired() ? "EXPIRED" : "ACTIVE",
+            session.getCreatedTime(),
+            session.getLastAccessTime(),
+            session.getCurrentDirectory()
+        );
         
-        return result;
+        return ApiResponse.success("获取会话状态成功", statusResponse);
     }
     
     /**
@@ -326,56 +308,46 @@ public class TerminalController {
      * @param sessionId 会话ID
      * @return 操作结果
      */
+    @Operation(summary = "关闭终端会话")
     @DeleteMapping("/session/{sessionId}")
-    public Map<String, Object> closeSession(@PathVariable String sessionId) {
-        Map<String, Object> result = new HashMap<>();
-        
+    public ApiResponse<String> closeSession(@PathVariable String sessionId) {
         ShellSession session = sessions.remove(sessionId);
         if (session == null) {
-            result.put("success", false);
-            result.put("error", "会话不存在");
-            return result;
+            return ApiResponse.error("会话不存在: " + sessionId);
         }
         
         try {
             session.close();
-            result.put("success", true);
-            result.put("message", "会话已关闭");
+            return ApiResponse.success("会话已关闭", sessionId);
         } catch (Exception e) {
-            result.put("success", false);
-            result.put("error", "关闭会话失败: " + e.getMessage());
+            return ApiResponse.error("关闭会话失败: " + e.getMessage());
         }
-        
-        return result;
     }
     
     /**
      * 获取所有活跃会话
      * @return 会话列表
      */
+    @Operation(summary = "获取所有会话列表")
     @GetMapping("/sessions")
-    public Map<String, Object> getAllSessions() {
-        Map<String, Object> result = new HashMap<>();
-        
+    public ApiResponse<java.util.List<SessionStatusResponse>> getAllSessions() {
         // 清理过期会话
         sessions.entrySet().removeIf(entry -> entry.getValue().isExpired());
         
-        java.util.List<Map<String, Object>> sessionList = new java.util.ArrayList<>();
+        java.util.List<SessionStatusResponse> sessionList = new java.util.ArrayList<>();
         for (Map.Entry<String, ShellSession> entry : sessions.entrySet()) {
             ShellSession session = entry.getValue();
-            Map<String, Object> sessionInfo = new HashMap<>();
-            sessionInfo.put("sessionId", entry.getKey());
-            sessionInfo.put("alive", session.isAlive());
-            sessionInfo.put("createdTime", session.getCreatedTime());
-            sessionInfo.put("lastAccessTime", session.getLastAccessTime());
+            SessionStatusResponse sessionInfo = new SessionStatusResponse(
+                entry.getKey(),
+                session.isAlive() ? "ACTIVE" : "INACTIVE",
+                session.getCreatedTime(),
+                session.getLastAccessTime(),
+                session.getCurrentDirectory()
+            );
             sessionList.add(sessionInfo);
         }
         
-        result.put("success", true);
-        result.put("sessions", sessionList);
-        result.put("count", sessionList.size());
-        
-        return result;
+        return ApiResponse.success("获取所有会话成功，共" + sessionList.size() + "个会话", sessionList);
     }
     
     /**
@@ -487,6 +459,15 @@ public class TerminalController {
         
         public long getLastAccessTime() {
             return lastAccessTime;
+        }
+        
+        public String getCurrentDirectory() {
+            try {
+                // 通过执行pwd命令获取当前目录
+                return executeCommand("pwd", true, 5).trim();
+            } catch (Exception e) {
+                return "Unknown";
+            }
         }
         
         private void updateLastAccessTime() {

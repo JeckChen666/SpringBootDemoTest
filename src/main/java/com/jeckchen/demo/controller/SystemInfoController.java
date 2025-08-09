@@ -1,5 +1,7 @@
 package com.jeckchen.demo.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.PropertySource;
@@ -20,6 +22,7 @@ import java.util.Map;
 @Slf4j
 @Controller
 @PropertySource(value = "classpath:git.properties", ignoreResourceNotFound = true)
+@Tag(name = "系统信息接口", description = "系统信息相关操作接口")
 public class SystemInfoController {
 
     @Value("${app.build.time}")
@@ -34,6 +37,7 @@ public class SystemInfoController {
     @Value("${git.commit.time:unknown}")
     private String gitCommitTime;
 
+    @Operation(summary = "获取系统信息页面")
     @GetMapping("/system-info")
     public String getSystemInfo(Model model) {
         OperatingSystemMXBean osBean = ManagementFactory.getOperatingSystemMXBean();
@@ -44,16 +48,19 @@ public class SystemInfoController {
         return "system-info";
     }
 
+    @Operation(summary = "获取终端页面")
     @GetMapping("/terminal")
     public String terminal() {
         return "terminal";
     }
     
+    @Operation(summary = "获取XTerm终端页面")
     @GetMapping("/xterm")
     public String xterm() {
         return "xterm";
     }
 
+    @Operation(summary = "获取系统使用情况")
     @ResponseBody
     @GetMapping("/api/system/usage")
     public Map<String, Object> getSystemUsage() {
@@ -96,6 +103,7 @@ public class SystemInfoController {
         return result;
     }
     
+    @Operation(summary = "获取构建信息")
     @ResponseBody
     @GetMapping("/api/build-info")
     public Map<String, Object> getBuildInfo() {
