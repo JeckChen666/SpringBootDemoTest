@@ -1,6 +1,7 @@
 package com.jeckchen.demo.config;
 
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
@@ -18,11 +19,22 @@ import java.util.Enumeration;
  */
 @Component
 public class SystemConfig {
+    
+    private final ServletWebServerApplicationContext applicationContext;
+
+    public SystemConfig(ServletWebServerApplicationContext applicationContext) {
+        this.applicationContext = applicationContext;
+    }
 
     @EventListener(ApplicationReadyEvent.class)
     public void onApplicationReady() {
         System.out.println("=========================================");
         System.out.println("Spring Boot 应用启动完成！");
+        
+        // 打印实际占用的端口号
+        int port = applicationContext.getWebServer().getPort();
+        System.out.println("应用实际占用端口: " + port);
+        
         try {
             System.out.println("本机IP地址列表：");
             Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();

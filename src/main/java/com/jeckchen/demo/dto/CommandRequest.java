@@ -16,4 +16,5 @@ public class CommandRequest {
     
     @Schema(description = "要执行的命令", example = "ls -la", required = true)
     private String command;
+
 }

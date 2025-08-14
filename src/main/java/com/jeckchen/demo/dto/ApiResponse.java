@@ -10,8 +10,6 @@ import java.util.List;
  * 通用API响应DTO
  */
 @Data
-@NoArgsConstructor
-@AllArgsConstructor
 @Schema(description = "通用API响应")
 public class ApiResponse<T> {
     

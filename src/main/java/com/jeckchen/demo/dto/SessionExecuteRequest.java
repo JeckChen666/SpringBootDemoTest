@@ -22,8 +22,4 @@ public class SessionExecuteRequest {
     
     @Schema(description = "超时时间（秒）", example = "10", defaultValue = "10")
     private Integer timeoutSeconds = 10;
-    
-    public SessionExecuteRequest(String command) {
-        this.command = command;
-    }
 }
